@@ -12,7 +12,7 @@
 
 ---
 
-## ⚡ 2-Minute Overview
+## ⚡ 2-Minute Product Overview
 **SyncBoard** is an enterprise-grade real-time collaborative whiteboard and sticky-note canvas. Designed with a custom bi-directional WebSocket room protocol, it powers multi-user spatial collaboration with sub-10ms peer synchronization, remote cursor tracking, optimistic Last-Write-Wins (LWW) conflict resolution, soft card locking, and durable SQLite WAL persistence.
 
 ### Core Capabilities
@@ -20,7 +20,7 @@
 2. **Real-Time Presence & Remote Cursors**: Streams high-frequency pointer vectors with user identity tags, color assignments, and automated 30-second stale heartbeat reaping.
 3. **Optimistic Spatial Dragging & Conflict Guard**: Immediate 60fps local rendering with monotonic version checks and Last-Write-Wins (LWW) convergence. Includes soft card locking (`CARD_LOCK`) to prevent concurrent text edits.
 4. **Native Relational Persistence**: Zero-external-dependency Node 24 `node:sqlite` database in Write-Ahead Logging (WAL) mode ensuring sub-millisecond snapshots and transactional state durability.
-5. **Interactive Peer Simulator**: Built directly into the client interface, engineers can launch automated virtual peers ("Alice", "Bob") in one click to watch live cursor trajectories, card movements, and real-time color syncing without needing a second browser or device.
+5. **Interactive Peer Simulator**: Built directly into the client interface so engineers can launch automated virtual peers ("Alice", "Bob") in one click to watch live cursor trajectories, card movements, and real-time color syncing without needing a second browser or device.
 
 ---
 
