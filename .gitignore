@@ -4,10 +4,12 @@ dist-server
 .env
 .env.local
 *.log
-data/*.db
-data/*.db-journal
-data/*.db-wal
-data/*.db-shm
+# SQLite file written by the server (server/data when run from a workspace, data at the repo root)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 coverage
 .DS_Store
 Thumbs.db

@@ -1,19 +1,15 @@
-import http from 'node:http';
-import { WebSocketServer } from 'ws';
-import { createApp } from './app.js';
-import { WebSocketService } from './services/websocket.service.js';
+import { createServer } from './server.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 4000;
 
-const { app, boardService } = createApp();
+const running = createServer();
 
-const server = http.createServer(app);
-
-// Mount WebSocket server on /ws
-const wss = new WebSocketServer({ server, path: '/ws' });
-new WebSocketService(wss, boardService);
-
-server.listen(PORT, () => {
-  console.log(`[SyncBoard Server] HTTP API running on http://localhost:${PORT}`);
-  console.log(`[SyncBoard Server] WebSocket endpoint at ws://localhost:${PORT}/ws`);
+running.server.listen(PORT, () => {
+  console.log(`SyncBoard listening on http://localhost:${PORT} (WebSocket at /ws)`);
 });
+
+function shutdown(): void {
+  void running.close().then(() => process.exit(0));
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

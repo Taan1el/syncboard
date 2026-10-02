@@ -1,87 +1,31 @@
 import { DatabaseSync } from 'node:sqlite';
-import crypto from 'node:crypto';
+import { sampleActivity, sampleBoards, sampleCards } from '../../../shared/sample.js';
 
+/** Fills an empty database with the same sample boards the browser demo uses. */
 export function seedDatabase(db: DatabaseSync): void {
-  const check = db.prepare('SELECT COUNT(*) as count FROM boards;').get() as { count: number };
-  if (check.count > 0) return;
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM boards;').get() as { count: number };
+  if (count > 0) return;
 
-  const now = new Date().toISOString();
-  const boardId = 'board-default';
-
-  db.prepare(`
-    INSERT INTO boards (id, title, description, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?);
-  `).run(
-    boardId,
-    'Sprint 42 Architecture & Reliability Board',
-    'Real-time collaborative planning canvas for Baltic engineering initiatives',
-    now,
-    now
+  const insertBoard = db.prepare(
+    'INSERT INTO boards (id, title, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?);'
   );
+  for (const b of sampleBoards()) {
+    insertBoard.run(b.id, b.title, b.description, b.created_at, b.updated_at);
+  }
 
   const insertCard = db.prepare(`
-    INSERT INTO cards (
-      id, board_id, title, content, color, x, y, width, height, version, locked_by, updated_by, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?);
+    INSERT INTO cards (id, board_id, title, content, column_id, position, version, locked_by, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?);
   `);
+  for (const c of sampleCards()) {
+    insertCard.run(c.id, c.board_id, c.title, c.content, c.column, c.position, c.version, c.updated_by, c.updated_at);
+  }
 
-  insertCard.run(
-    crypto.randomUUID(),
-    boardId,
-    'SEPA Instant Settlement Gateway',
-    'Integrate instant EUR payment rail with real-time idempotency checks and ledger reconciliation.',
-    '#bae6fd',
-    50,
-    60,
-    240,
-    150,
-    1,
-    'Laura Tamm',
-    now
-  );
-
-  insertCard.run(
-    crypto.randomUUID(),
-    boardId,
-    'Audit Hash Chain Verification Cron',
-    'Automate nightly cryptographic SHA-256 block traversal to ensure zero ledger tampering.',
-    '#e9d5ff',
-    330,
-    60,
-    240,
-    150,
-    1,
-    'Erik Kallas',
-    now
-  );
-
-  insertCard.run(
-    crypto.randomUUID(),
-    boardId,
-    'Kubernetes Ingress Rate Limiting',
-    'Deploy sliding-window token bucket middleware at ingress layer to mitigate DDoS spikes.',
-    '#fef08a',
-    50,
-    250,
-    240,
-    150,
-    1,
-    'Sander Sepp',
-    now
-  );
-
-  insertCard.run(
-    crypto.randomUUID(),
-    boardId,
-    'Zero-Downtime SQLite Replicated Backups',
-    'Implement snapshot replication using WAL checkpoints for instant disaster recovery.',
-    '#bbf7d0',
-    330,
-    250,
-    240,
-    150,
-    1,
-    'Maria Kukk',
-    now
-  );
+  const insertActivity = db.prepare(`
+    INSERT INTO mutation_audit (id, board_id, card_id, action, actor_name, card_title, detail, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+  `);
+  for (const a of sampleActivity()) {
+    insertActivity.run(a.id, a.board_id, a.card_id, a.action, a.actor_name, a.card_title, a.detail, a.created_at);
+  }
 }

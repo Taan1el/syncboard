@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*", "../shared/**/*"]
+  "include": ["src/**/*", "test/**/*", "vitest.config.ts", "../shared/**/*"]
 }

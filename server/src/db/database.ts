@@ -2,15 +2,16 @@ import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import fs from 'node:fs';
 
+/**
+ * Opens the SQLite file. Order of precedence: the `dbPath` argument, the
+ * SYNCBOARD_DB environment variable, then `data/syncboard.db` under the
+ * current working directory. Pass ':memory:' for a throwaway database.
+ */
 export function createDatabase(dbPath?: string): DatabaseSync {
-  let finalPath = dbPath;
+  const finalPath = dbPath ?? process.env.SYNCBOARD_DB ?? path.resolve(process.cwd(), 'data', 'syncboard.db');
 
-  if (!finalPath) {
-    const dataDir = path.resolve(process.cwd(), 'data');
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-    finalPath = path.join(dataDir, 'syncboard.db');
+  if (finalPath !== ':memory:') {
+    fs.mkdirSync(path.dirname(finalPath), { recursive: true });
   }
 
   const db = new DatabaseSync(finalPath);

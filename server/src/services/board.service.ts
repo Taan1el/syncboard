@@ -1,141 +1,77 @@
-import { BoardRepository } from '../repositories/board.repository.js';
-import { CardRepository } from '../repositories/card.repository.js';
-import { Board, CanvasCard, CreateBoardDto } from '../../../shared/types.js';
+import type { BoardRepository } from '../repositories/board.repository.js';
+import type { SqliteStore } from '../repositories/sqlite-store.js';
+import type { Hub } from '../../../shared/hub.js';
+import { ACTIVITY_LIMIT } from '../../../shared/hub.js';
+import type { ActivityEntry, Board, BoardMetrics, CanvasCard, CreateBoardDto } from '../../../shared/types.js';
+import { SyncError, isColumnId, validateContent, validateName, validateTitle } from '../../../shared/validate.js';
+import type { Delivery } from '../../../shared/hub.js';
+
+const DESCRIPTION_MAX = 500;
+
+export class NotFoundError extends Error {}
 
 export class BoardService {
   constructor(
-    private boardRepo: BoardRepository,
-    private cardRepo: CardRepository
+    private boards: BoardRepository,
+    private store: SqliteStore,
+    private hub: Hub
   ) {}
 
   listBoards(): Board[] {
-    return this.boardRepo.listBoards();
+    return this.boards.listBoards();
   }
 
-  getBoardById(id: string): Board | null {
-    return this.boardRepo.getBoardById(id);
+  getBoard(id: string): Board {
+    const board = this.boards.getBoardById(id);
+    if (!board) throw new NotFoundError('Board not found');
+    return board;
   }
 
   createBoard(dto: CreateBoardDto): Board {
-    if (!dto.title.trim()) {
-      throw new Error('Board title is required');
+    const title = validateTitle(dto?.title);
+    const description = dto.description === undefined ? '' : validateContent(dto.description);
+    if (description.length > DESCRIPTION_MAX) {
+      throw new SyncError(`description must be at most ${DESCRIPTION_MAX} characters`);
     }
-    return this.boardRepo.createBoard(dto);
+    return this.boards.createBoard({ title, description });
   }
 
-  listCardsByBoard(boardId: string): CanvasCard[] {
-    return this.cardRepo.listCardsByBoard(boardId);
+  listCards(boardId: string): CanvasCard[] {
+    this.getBoard(boardId);
+    return this.store.listCards(boardId);
   }
 
-  createCard(data: {
-    board_id: string;
-    title: string;
-    content: string;
-    color?: string;
-    x: number;
-    y: number;
-    updated_by: string;
-  }): CanvasCard {
-    const card = this.cardRepo.createCard(data);
-    this.cardRepo.recordMutation(data.board_id, card.id, 'card.created', data.updated_by);
-    return card;
+  listActivity(boardId: string, limit = ACTIVITY_LIMIT): ActivityEntry[] {
+    this.getBoard(boardId);
+    return this.store.listActivity(boardId, Math.min(Math.max(limit, 1), 100));
   }
 
-  moveCard(
-    id: string,
-    x: number,
-    y: number,
-    clientVersion: number,
-    updatedBy: string
-  ): CanvasCard {
-    const current = this.cardRepo.getCardById(id);
-    if (!current) {
-      throw new Error(`Card not found: ${id}`);
-    }
-
-    if (current.locked_by && current.locked_by !== updatedBy) {
-      throw new Error(`Card is locked for editing by ${current.locked_by}`);
-    }
-
-    const nextVersion = Math.max(current.version, clientVersion) + 1;
-    const updated = this.cardRepo.updatePosition(id, x, y, nextVersion, updatedBy);
-    this.cardRepo.recordMutation(current.board_id, id, 'card.moved', updatedBy);
-    return updated;
+  /** Creates a card from a REST request. Returns the card and the frames to broadcast. */
+  createCard(
+    boardId: string,
+    input: { title: unknown; content: unknown; column: unknown; updated_by: unknown }
+  ): { card: CanvasCard; deliveries: Delivery[] } {
+    this.getBoard(boardId);
+    const actor = input.updated_by === undefined ? 'API' : validateName(input.updated_by, 'updated_by');
+    const column = input.column ?? 'backlog';
+    if (!isColumnId(column)) throw new SyncError('column must be one of backlog, doing, review, done');
+    const deliveries = this.hub.run(boardId, actor, {
+      type: 'create',
+      title: input.title as string,
+      content: (input.content ?? '') as string,
+      column,
+    });
+    const created = deliveries[0].msg;
+    if (created.type !== 'card_created') throw new Error('Unexpected hub result');
+    return { card: created.card, deliveries };
   }
 
-  updateCard(
-    id: string,
-    title: string,
-    content: string,
-    color: string | undefined,
-    clientVersion: number,
-    updatedBy: string
-  ): CanvasCard {
-    const current = this.cardRepo.getCardById(id);
-    if (!current) {
-      throw new Error(`Card not found: ${id}`);
-    }
-
-    if (current.locked_by && current.locked_by !== updatedBy) {
-      throw new Error(`Card is locked for editing by ${current.locked_by}`);
-    }
-
-    const nextVersion = Math.max(current.version, clientVersion) + 1;
-    const updated = this.cardRepo.updateContent(id, title, content, color, nextVersion, updatedBy);
-    this.cardRepo.recordMutation(current.board_id, id, 'card.updated', updatedBy);
-    return updated;
-  }
-
-  lockCard(id: string, userName: string): CanvasCard {
-    const current = this.cardRepo.getCardById(id);
-    if (!current) {
-      throw new Error(`Card not found: ${id}`);
-    }
-
-    if (current.locked_by && current.locked_by !== userName) {
-      throw new Error(`Card is already locked by ${current.locked_by}`);
-    }
-
-    const updated = this.cardRepo.setLock(id, userName);
-    this.cardRepo.recordMutation(current.board_id, id, 'card.locked', userName);
-    return updated;
-  }
-
-  unlockCard(id: string, userName: string): CanvasCard {
-    const current = this.cardRepo.getCardById(id);
-    if (!current) {
-      throw new Error(`Card not found: ${id}`);
-    }
-
-    const updated = this.cardRepo.setLock(id, null);
-    this.cardRepo.recordMutation(current.board_id, id, 'card.unlocked', userName);
-    return updated;
-  }
-
-  deleteCard(id: string, userName: string): { success: boolean; board_id: string } {
-    const current = this.cardRepo.getCardById(id);
-    if (!current) {
-      throw new Error(`Card not found: ${id}`);
-    }
-
-    if (current.locked_by && current.locked_by !== userName) {
-      throw new Error(`Cannot delete card locked by ${current.locked_by}`);
-    }
-
-    const boardId = current.board_id;
-    const deleted = this.cardRepo.deleteCard(id);
-    if (deleted) {
-      this.cardRepo.recordMutation(boardId, id, 'card.deleted', userName);
-    }
-
-    return { success: deleted, board_id: boardId };
-  }
-
-  getMetrics(activeConnections = 0) {
-    const dbMetrics = this.cardRepo.getMetrics();
+  getMetrics(): BoardMetrics {
     return {
-      ...dbMetrics,
-      active_connections: activeConnections,
+      total_boards: this.boards.listBoards().length,
+      total_cards: this.store.countCards(),
+      active_connections: this.hub.connectionCount(),
+      total_mutations: this.store.countMutations(),
     };
   }
 }

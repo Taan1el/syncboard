@@ -13,7 +13,13 @@ export function createApiRouter(boardController: BoardController): Router {
   router.get('/boards/:id', boardController.getById);
   router.get('/boards/:id/cards', boardController.listCards);
   router.post('/boards/:id/cards', boardController.createCard);
+  router.get('/boards/:id/activity', boardController.listActivity);
   router.get('/metrics', boardController.getMetrics);
+
+  // Unknown API paths answer in JSON instead of falling through to the client bundle.
+  router.use((_req, res) => {
+    res.status(404).json({ success: false, error: 'Not found' });
+  });
 
   return router;
 }
