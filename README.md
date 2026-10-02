@@ -80,9 +80,9 @@ Nothing is required for the defaults above. See `server/.env.example` and `clien
 ## How it works
 
 ```
-browser ──ws /ws──▶ WebSocketService ──▶ Hub ──▶ SqliteStore ──▶ data/syncboard.db
-browser ──REST───▶ Express routes   ──▶ Hub.run
-demo page ───────────────────────────▶ Hub ──▶ MemoryStore   (same Hub, no network)
+browser --ws /ws--> WebSocketService --> Hub --> SqliteStore --> data/syncboard.db
+browser --REST-----> Express routes   --> Hub.run
+demo page ---------------------------> Hub --> MemoryStore   (same Hub, no network)
 ```
 
 - **Hub** (`shared/hub.ts`) holds the room logic and does no I/O: who is on which board, who holds which lock, and what each operation turns into. Feed it a frame and it returns the frames to send and to whom.
