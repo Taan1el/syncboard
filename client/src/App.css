@@ -344,16 +344,13 @@ p {
   margin-top: 32px;
 }
 
-.board {
-  min-width: 0;
-}
-
 .board-head {
+  grid-column: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 16px;
-  margin-bottom: 20px;
+  margin-bottom: -8px;
 }
 
 .board-head h2 {
@@ -366,6 +363,8 @@ p {
 }
 
 .columns {
+  grid-column: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
@@ -519,6 +518,11 @@ p {
 }
 
 /* Activity rail */
+.rail {
+  grid-column: 2;
+  min-width: 0;
+}
+
 .rail-toggle {
   display: none;
 }
@@ -638,6 +642,10 @@ p {
     gap: 32px;
   }
 
+  .rail {
+    grid-column: 1;
+  }
+
   .rail-toggle {
     display: inline-flex;
     width: 100%;
@@ -684,4 +692,11 @@ p {
   * {
     transition: none !important;
   }
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }

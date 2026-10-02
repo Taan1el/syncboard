@@ -26,7 +26,9 @@ export function CardDialog({ card, column, onSave, onDelete, onClose }: CardDial
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     titleRef.current?.focus();
+    return () => opener?.focus?.();
   }, []);
 
   const keyDown = (e: React.KeyboardEvent) => {

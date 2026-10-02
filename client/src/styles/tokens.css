@@ -5,7 +5,7 @@
   --ink-2: #434d5f;
   --ink-3: #596477;
   --rule: #d3d9e2;
-  --rule-strong: #8d97a8;
+  --rule-strong: #707b8f;
   --accent: #0b6bcb;
   --accent-ink: #ffffff;
   --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));

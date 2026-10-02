@@ -12,11 +12,11 @@ interface ActivityRailProps {
 export function ActivityRail({ entries, open, onToggle }: ActivityRailProps) {
   return (
     <aside className="rail" data-open={open}>
-      <button type="button" className="btn rail-toggle" aria-expanded={open} aria-controls="activity-list" onClick={onToggle}>
+      <button type="button" className="btn rail-toggle" aria-expanded={open} aria-controls="activity-body" onClick={onToggle}>
         <History size={16} strokeWidth={1.75} aria-hidden="true" />
         {open ? 'Hide activity' : `Show activity (${entries.length})`}
       </button>
-      <div className="rail-body">
+      <div className="rail-body" id="activity-body">
         <div className="rail-head">
           <h2>Activity</h2>
           <span className="mono muted">{formatCount(entries.length, 'change')}, UTC</span>
@@ -24,7 +24,7 @@ export function ActivityRail({ entries, open, onToggle }: ActivityRailProps) {
         {entries.length === 0 ? (
           <p className="muted">Nothing has changed on this board yet.</p>
         ) : (
-          <ol id="activity-list" className="feed">
+          <ol className="feed">
             {entries.map((e) => (
               <li key={e.id}>
                 <time className="mono" dateTime={e.created_at}>

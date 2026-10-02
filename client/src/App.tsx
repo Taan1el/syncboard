@@ -194,24 +194,22 @@ export function App({ services = defaultServices }: { services?: Services }) {
           name={name}
           onRename={rename}
         />
-        <div className="workspace">
-          <main className="board">
-            <div className="board-head">
-              <h2>{boardInfo?.title ?? 'Board'}</h2>
-              <p>{boardInfo?.description}</p>
-              <span className="mono muted">{formatCount(state.cards.length, 'card')}</span>
-            </div>
-            <Board
-              cards={state.cards}
-              userName={me}
-              onEdit={openEdit}
-              onAdd={(column) => setDialog({ card: null, column })}
-              onMove={move}
-              onKeyMove={keyMove}
-            />
-          </main>
+        <main className="workspace">
+          <div className="board-head">
+            <h2>{boardInfo?.title ?? 'Board'}</h2>
+            <p>{boardInfo?.description}</p>
+            <span className="mono muted">{formatCount(state.cards.length, 'card')}</span>
+          </div>
+          <Board
+            cards={state.cards}
+            userName={me}
+            onEdit={openEdit}
+            onAdd={(column) => setDialog({ card: null, column })}
+            onMove={move}
+            onKeyMove={keyMove}
+          />
           <ActivityRail entries={state.activity} open={activityOpen} onToggle={() => setActivityOpen((o) => !o)} />
-        </div>
+        </main>
       </div>
       {dialog && (
         <CardDialog
