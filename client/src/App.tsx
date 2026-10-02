@@ -1,303 +1,229 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { api } from './services/api';
-import {
-  Board,
-  CanvasCard,
-  UserPresence,
-  BoardMetrics,
-  ServerWsMessage,
-} from '../../shared/types';
-import { BoardHeader } from './components/BoardHeader';
-import { CollaborativeCanvas } from './components/CollaborativeCanvas';
-import { BoardMetricsOverview } from './components/BoardMetricsOverview';
-import { MultiPeerSimulator } from './components/MultiPeerSimulator';
-import { CardEditorModal } from './components/CardEditorModal';
-import './App.css';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import { COLUMNS } from '../../shared/types';
+import type { Board as BoardInfo, CanvasCard, ColumnId, ServerWsMessage } from '../../shared/types';
+import { defaultServices } from './services';
+import type { Connection, ConnectionStatus, Services } from './services/types';
+import { boardReducer, emptyState } from './lib/state';
+import { planKeyMove } from './lib/move';
+import type { MoveKey } from './lib/move';
+import { formatCount } from './lib/format';
+import { DemoBar } from './components/DemoBar';
+import { Header } from './components/Header';
+import { PresenceStrip } from './components/PresenceStrip';
+import { Board } from './components/Board';
+import { ActivityRail } from './components/ActivityRail';
+import { CardDialog } from './components/CardDialog';
+import type { CardDraft } from './components/CardDialog';
 
-// Random local user identity for current session
-const RANDOM_COLORS = ['#38bdf8', '#a855f7', '#10b981', '#f59e0b', '#ec4899', '#6366f1'];
-const RANDOM_NAMES = ['Developer Alex', 'Designer Mia', 'Product Lead Karl', 'Engineer Elena', 'Architect Toomas'];
+const NAME_KEY = 'syncboard.name';
+const TOAST_MS = 5000;
+const COLORS = ['#0b6bcb', '#1a7346', '#9a5700', '#6b4bc4', '#b3261e'];
 
-const CURRENT_USER = {
-  name: RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)],
-  color: RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)],
-};
+function readName(fallback: string): string {
+  try {
+    return window.localStorage.getItem(NAME_KEY) || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
-export const App: React.FC = () => {
-  const [boards, setBoards] = useState<Board[]>([]);
-  const [selectedBoardId, setSelectedBoardId] = useState<string>('');
-  const [currentBoard, setCurrentBoard] = useState<Board | null>(null);
-  const [cards, setCards] = useState<CanvasCard[]>([]);
-  const [presences, setPresences] = useState<UserPresence[]>([]);
-  const [metrics, setMetrics] = useState<BoardMetrics>({
-    total_boards: 0,
-    total_cards: 0,
-    active_connections: 0,
-    total_mutations: 0,
-  });
+function colorFor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLORS[h % COLORS.length];
+}
 
-  const [isConnected, setIsConnected] = useState(false);
-  const [isEditorModalOpen, setIsEditorModalOpen] = useState(false);
-  const [cardToEdit, setCardToEdit] = useState<CanvasCard | null>(null);
+type Dialog = { card: CanvasCard | null; column: ColumnId } | null;
+
+export function App({ services = defaultServices }: { services?: Services }) {
+  const [boards, setBoards] = useState<BoardInfo[]>([]);
+  const [boardId, setBoardId] = useState('');
+  const [state, dispatch] = useReducer(boardReducer, emptyState);
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  const [retryInMs, setRetryInMs] = useState<number | undefined>();
+  const [name, setName] = useState(() => readName(services.defaultName));
   const [toast, setToast] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [session, setSession] = useState(0);
 
-  const wsClientRef = useRef<{ send: (msg: any) => void; close: () => void } | null>(null);
-  const lastCursorSend = useRef<number>(0);
+  const conn = useRef<Connection | null>(null);
+  const live = useRef({ boardId, name });
+  live.current = { boardId, name };
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3500);
-  };
+  const say = useCallback((text: string) => {
+    setToast(text);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
 
-  // Load available boards and initial metrics
-  const loadInitialData = useCallback(async () => {
-    try {
-      const [boardList, metricsData] = await Promise.all([api.getBoards(), api.getMetrics()]);
-      setBoards(boardList);
-      setMetrics(metricsData);
-
-      if (boardList.length > 0 && !selectedBoardId) {
-        setSelectedBoardId(boardList[0].id);
-        setCurrentBoard(boardList[0]);
-      }
-    } catch (err) {
-      console.error('Failed to load boards:', err);
-    }
-  }, [selectedBoardId]);
+  const join = useCallback(() => {
+    const { boardId: id, name: who } = live.current;
+    if (id) conn.current?.send({ type: 'join_board', board_id: id, user_name: who, color: colorFor(who) });
+  }, []);
 
   useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
-
-  // Handle WebSocket Room Lifecycle
-  useEffect(() => {
-    if (!selectedBoardId) return;
-
-    // Disconnect existing socket if switching boards
-    if (wsClientRef.current) {
-      wsClientRef.current.close();
-      wsClientRef.current = null;
-    }
-
-    const handleWsMessage = (msg: ServerWsMessage) => {
-      switch (msg.type) {
-        case 'board_sync': {
-          setCurrentBoard(msg.board);
-          setCards(msg.cards);
-          // Filter out self from remote presences list
-          setPresences(msg.presences.filter((p) => p.client_id !== msg.client_id));
-          break;
-        }
-
-        case 'presence_update': {
-          setPresences(msg.presences.filter((p) => p.user_name !== CURRENT_USER.name));
-          break;
-        }
-
-        case 'card_created': {
-          setCards((prev) => [...prev, msg.card]);
-          showToast(`New card "${msg.card.title}" added by ${msg.card.updated_by}`);
-          break;
-        }
-
-        case 'card_moved': {
-          setCards((prev) =>
-            prev.map((c) =>
-              c.id === msg.id
-                ? { ...c, x: msg.x, y: msg.y, version: msg.version, updated_by: msg.updated_by }
-                : c
-            )
-          );
-          break;
-        }
-
-        case 'card_updated': {
-          setCards((prev) => prev.map((c) => (c.id === msg.card.id ? msg.card : c)));
-          showToast(`Card "${msg.card.title}" updated by ${msg.card.updated_by}`);
-          break;
-        }
-
-        case 'card_locked': {
-          setCards((prev) =>
-            prev.map((c) => (c.id === msg.id ? { ...c, locked_by: msg.locked_by } : c))
-          );
-          break;
-        }
-
-        case 'card_unlocked': {
-          setCards((prev) =>
-            prev.map((c) => (c.id === msg.id ? { ...c, locked_by: null } : c))
-          );
-          break;
-        }
-
-        case 'card_deleted': {
-          setCards((prev) => prev.filter((c) => c.id !== msg.id));
-          showToast('Card deleted from canvas');
-          break;
-        }
-
-        case 'error': {
-          alert(`Sync Error: ${msg.message}`);
-          break;
-        }
-      }
-    };
-
-    const ws = api.createWebSocketConnection(
-      selectedBoardId,
-      CURRENT_USER.name,
-      CURRENT_USER.color,
-      handleWsMessage,
-      setIsConnected
-    );
-
-    wsClientRef.current = ws;
-
+    let cancelled = false;
+    services
+      .loadBoards()
+      .then((list) => {
+        if (cancelled) return;
+        setBoards(list);
+        setBoardId((current) => current || list[0]?.id || '');
+      })
+      .catch(() => say('Could not load the board list.'));
     return () => {
-      ws.close();
+      cancelled = true;
     };
-  }, [selectedBoardId]);
+  }, [services, session, say]);
 
-  // Collaborative Actions
-  const handleMoveCard = (id: string, x: number, y: number, version: number) => {
-    // 1. Optimistic Local Update
-    setCards((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, x, y, version: c.version + 1 } : c))
-    );
-
-    // 2. Transmit through WebSocket to Room Peers
-    wsClientRef.current?.send({
-      type: 'card_move',
-      id,
-      x,
-      y,
-      version,
+  useEffect(() => {
+    const c = services.connect({
+      onMessage: (msg: ServerWsMessage) => {
+        if (msg.type === 'error') {
+          say(msg.message);
+          join();
+          return;
+        }
+        dispatch({ kind: 'server', msg });
+      },
+      onStatus: (s, retry) => {
+        setStatus(s);
+        setRetryInMs(retry);
+      },
     });
+    conn.current = c;
+    return () => {
+      c.close();
+      conn.current = null;
+    };
+  }, [services, session, say, join]);
+
+  // Join on every (re)connect and whenever the board or the name changes.
+  useEffect(() => {
+    if (status === 'open' && boardId) join();
+  }, [status, boardId, name, session, join]);
+
+  const me = state.userName ?? name;
+
+  const move = (id: string, column: ColumnId, index: number) => {
+    const card = state.cards.find((c) => c.id === id);
+    if (!card) return;
+    dispatch({ kind: 'move', id, column, index });
+    conn.current?.send({ type: 'card_move', id, column, index, version: card.version });
   };
 
-  const handleCursorMove = (x: number, y: number) => {
-    const now = Date.now();
-    // Throttle cursor broadcast to 40ms (~25 fps)
-    if (now - lastCursorSend.current > 40) {
-      lastCursorSend.current = now;
-      wsClientRef.current?.send({
-        type: 'cursor_move',
-        x,
-        y,
-      });
+  const keyMove = (id: string, key: MoveKey) => {
+    const target = planKeyMove(state.cards, id, key);
+    const card = state.cards.find((c) => c.id === id);
+    if (!target || !card) return;
+    move(id, target.column, target.index);
+    const title = COLUMNS.find((c) => c.id === target.column)?.title ?? target.column;
+    say(`Moved "${card.title}" to ${title}, position ${target.index + 1}.`);
+  };
+
+  const openEdit = (card: CanvasCard) => {
+    if (card.locked_by && card.locked_by !== me) {
+      say(`${card.locked_by} is editing "${card.title}".`);
+      return;
     }
+    conn.current?.send({ type: 'card_lock', id: card.id });
+    setDialog({ card, column: card.column });
   };
 
-  const handleToggleLock = (card: CanvasCard) => {
-    if (card.locked_by === CURRENT_USER.name) {
-      wsClientRef.current?.send({ type: 'card_unlock', id: card.id });
-    } else if (!card.locked_by) {
-      wsClientRef.current?.send({ type: 'card_lock', id: card.id });
+  const closeDialog = () => {
+    if (dialog?.card) conn.current?.send({ type: 'card_unlock', id: dialog.card.id });
+    setDialog(null);
+  };
+
+  const save = (draft: CardDraft) => {
+    const card = dialog?.card;
+    if (!card) {
+      conn.current?.send({ type: 'card_create', title: draft.title, content: draft.content, column: draft.column });
+      setDialog(null);
+      return;
     }
-  };
-
-  const handleDeleteCard = (id: string) => {
-    if (!confirm('Are you sure you want to delete this card?')) return;
-    wsClientRef.current?.send({ type: 'card_delete', id });
-  };
-
-  const handleOpenEdit = (card: CanvasCard) => {
-    setCardToEdit(card);
-    setIsEditorModalOpen(true);
-  };
-
-  const handleOpenCreate = () => {
-    setCardToEdit(null);
-    setIsEditorModalOpen(true);
-  };
-
-  const handleSaveCard = (data: { title: string; content: string; color: string }) => {
-    if (cardToEdit) {
-      // Edit existing card
-      wsClientRef.current?.send({
-        type: 'card_update',
-        id: cardToEdit.id,
-        title: data.title,
-        content: data.content,
-        color: data.color,
-        version: cardToEdit.version,
-      });
-    } else {
-      // Create new card
-      wsClientRef.current?.send({
-        type: 'card_create',
-        title: data.title,
-        content: data.content,
-        color: data.color,
-        x: Math.floor(80 + Math.random() * 260),
-        y: Math.floor(80 + Math.random() * 180),
-      });
+    conn.current?.send({ type: 'card_update', id: card.id, title: draft.title, content: draft.content, version: card.version });
+    if (draft.column !== card.column) {
+      const size = state.cards.filter((c) => c.column === draft.column).length;
+      move(card.id, draft.column, size);
     }
+    closeDialog();
   };
+
+  const remove = () => {
+    if (dialog?.card) conn.current?.send({ type: 'card_delete', id: dialog.card.id });
+    setDialog(null);
+  };
+
+  const rename = (next: string) => {
+    try {
+      window.localStorage.setItem(NAME_KEY, next);
+    } catch {
+      // Private mode: the name just lasts for this tab.
+    }
+    setName(next);
+  };
+
+  const reset = () => {
+    services.reset?.();
+    dispatch({ kind: 'clear' });
+    setBoardId('');
+    setDialog(null);
+    setSession((n) => n + 1);
+  };
+
+  const boardInfo = state.board ?? boards.find((b) => b.id === boardId) ?? null;
 
   return (
-    <div className="app-container">
-      {/* Top Header */}
-      <BoardHeader
-        board={currentBoard}
-        boards={boards}
-        presences={presences}
-        isConnected={isConnected}
-        currentUser={CURRENT_USER}
-        onSelectBoard={setSelectedBoardId}
-        onOpenCreateCard={handleOpenCreate}
-      />
-
-      {/* Toast */}
-      {toast && <div className="toast-notification">{toast}</div>}
-
-      <main className="dashboard-content">
-        {/* Real-time KPI Stats */}
-        <BoardMetricsOverview
-          metrics={{ ...metrics, total_cards: cards.length }}
-          onlineCount={presences.length + 1}
-          isConnected={isConnected}
+    <>
+      {services.isDemo && <DemoBar onReset={reset} />}
+      <div className="container page">
+        <Header
+          boards={boards}
+          boardId={boardId}
+          onSelectBoard={setBoardId}
+          onNewCard={() => setDialog({ card: null, column: 'backlog' })}
         />
-
-        {/* Multi-Peer Bot Simulator */}
-        <MultiPeerSimulator
-          cards={cards}
-          boardId={selectedBoardId}
-          onRefresh={loadInitialData}
+        <PresenceStrip
+          presences={state.presences}
+          clientId={state.clientId}
+          status={status}
+          retryInMs={retryInMs}
+          name={name}
+          onRename={rename}
         />
-
-        {/* Real-Time Interactive Canvas */}
-        <div className="canvas-wrapper-card">
-          <div className="canvas-header-bar">
-            <span className="canvas-status-tag">
-              ⚡ Drag sticky notes to test real-time optimistic sync & conflict resolution
-            </span>
-            <span className="collaborators-count">
-              {presences.length + 1} User{presences.length > 0 ? 's' : ''} in Room
-            </span>
-          </div>
-
-          <CollaborativeCanvas
-            cards={cards}
-            presences={presences}
-            currentUserName={CURRENT_USER.name}
-            onMoveCard={handleMoveCard}
-            onEditCard={handleOpenEdit}
-            onToggleLock={handleToggleLock}
-            onDeleteCard={handleDeleteCard}
-            onCursorMove={handleCursorMove}
-          />
+        <div className="workspace">
+          <main className="board">
+            <div className="board-head">
+              <h2>{boardInfo?.title ?? 'Board'}</h2>
+              <p>{boardInfo?.description}</p>
+              <span className="mono muted">{formatCount(state.cards.length, 'card')}</span>
+            </div>
+            <Board
+              cards={state.cards}
+              userName={me}
+              onEdit={openEdit}
+              onAdd={(column) => setDialog({ card: null, column })}
+              onMove={move}
+              onKeyMove={keyMove}
+            />
+          </main>
+          <ActivityRail entries={state.activity} open={activityOpen} onToggle={() => setActivityOpen((o) => !o)} />
         </div>
-      </main>
-
-      {/* Card Editor / Creator Modal */}
-      <CardEditorModal
-        isOpen={isEditorModalOpen}
-        cardToEdit={cardToEdit}
-        onClose={() => setIsEditorModalOpen(false)}
-        onSave={handleSaveCard}
-      />
-    </div>
+      </div>
+      {dialog && (
+        <CardDialog
+          key={dialog.card?.id ?? 'new'}
+          card={dialog.card}
+          column={dialog.column}
+          onSave={save}
+          onDelete={remove}
+          onClose={closeDialog}
+        />
+      )}
+      <output className={toast ? 'toast toast-on' : 'toast'}>{toast}</output>
+    </>
   );
-};
+}

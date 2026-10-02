@@ -1,0 +1,21 @@
+:root {
+  --paper: #ebeef3;
+  --surface: #ffffff;
+  --ink: #121826;
+  --ink-2: #434d5f;
+  --ink-3: #596477;
+  --rule: #d3d9e2;
+  --rule-strong: #8d97a8;
+  --accent: #0b6bcb;
+  --accent-ink: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  /* status colors are data: dots and small labels only */
+  --ok: #1a7346;
+  --warn: #9a5700;
+  --bad: #b3261e;
+  --radius: 4px;
+  --page-pad: clamp(16px, 4vw, 48px);
+  --font-heading: "Epilogue Variable", "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Karla Variable", "Karla", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Inconsolata Variable", "Inconsolata", ui-monospace, "SFMono-Regular", monospace;
+}
