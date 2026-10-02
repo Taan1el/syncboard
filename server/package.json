@@ -1,6 +1,20 @@
 {
   "name": "@syncboard/server",
   "version": "1.0.0",
+  "description": "SyncBoard server: REST API, WebSocket rooms and SQLite store",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Taan1el/syncboard.git"
+  },
+  "homepage": "https://taan1el.github.io/syncboard/",
+  "bugs": {
+    "url": "https://github.com/Taan1el/syncboard/issues"
+  },
+  "author": "Taaniel Vananurm",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "private": true,
   "type": "module",
   "scripts": {

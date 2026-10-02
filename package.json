@@ -1,9 +1,22 @@
 {
   "name": "syncboard",
   "version": "1.0.0",
+  "description": "Real-Time WebSocket Collaborative Canvas, Presence Tracker & State Synchronization Engine",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Taan1el/syncboard.git"
+  },
+  "homepage": "https://taan1el.github.io/syncboard/",
+  "bugs": {
+    "url": "https://github.com/Taan1el/syncboard/issues"
+  },
+  "author": "Taaniel Vananurm",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "private": true,
   "type": "module",
-  "description": "Real-Time WebSocket Collaborative Canvas, Presence Tracker & State Synchronization Engine",
   "workspaces": [
     "server",
     "client"
@@ -20,9 +33,21 @@
     "test": "npm run test:server && npm run test:client",
     "lint:server": "npm run lint --workspace=server",
     "lint:client": "npm run lint --workspace=client",
-    "lint": "npm run lint:server && npm run lint:client"
+    "lint": "npm run lint:server && npm run lint:client",
+    "build:pages": "npm run build:pages --workspace=client",
+    "start": "npm run start --workspace=server"
   },
   "devDependencies": {
     "typescript": "^5.8.2"
-  }
+  },
+  "keywords": [
+    "kanban",
+    "websocket",
+    "realtime",
+    "collaboration",
+    "presence",
+    "sqlite",
+    "react",
+    "typescript"
+  ]
 }
