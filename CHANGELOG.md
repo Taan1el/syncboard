@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- A test that reads the stylesheet for every container that can scroll and checks it is reachable from the keyboard in the board and both card dialogs. Real-browser contrast and scroll checks at three widths found nothing to fix.
 - Automated accessibility tests (axe, WCAG 2 A and AA rules) for the board, the edit and new card dialogs and the activity rail, plus a check that every drag handle has a name and works from the keyboard. Color contrast is verified outside jsdom. The checks found no violations in the current UI, so no product code changed.
 
 ## [1.0.0] - 2026-10-02
