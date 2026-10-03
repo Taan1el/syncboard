@@ -4,6 +4,11 @@ All notable changes to this project are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Automated accessibility tests (axe, WCAG 2 A and AA rules) for the board, the edit and new card dialogs and the activity rail, plus a check that every drag handle has a name and works from the keyboard. Color contrast is verified outside jsdom. The checks found no violations in the current UI, so no product code changed.
+
 ## [1.0.0] - 2026-10-02
 
 ### Added

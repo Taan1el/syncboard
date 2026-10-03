@@ -146,7 +146,9 @@ Server to client: `board_sync` (board, cards, presences, activity, your client i
 npm test
 ```
 
-The server suite (89 tests) covers the board rules and their edge cases, frame validation, the hub, the REST routes, SQLite persistence across a restart and live WebSocket sessions. The client suite (31 tests) uses React Testing Library with fake timers for the key flows (adding, editing, moving, locking, deleting, switching boards, resetting the demo, error and reconnect handling), plus the reducer, the move planning and the reconnect backoff. No test sleeps for real time.
+The server suite (89 tests) covers the board rules and their edge cases, frame validation, the hub, the REST routes, SQLite persistence across a restart and live WebSocket sessions. The client suite (36 tests) uses React Testing Library with fake timers for the key flows (adding, editing, moving, locking, deleting, switching boards, resetting the demo, error and reconnect handling), plus the reducer, the move planning and the reconnect backoff. No test sleeps for real time.
+
+The client suite also includes automated accessibility checks (axe, WCAG 2 A and AA rules) for the board, the card dialogs and the activity rail. jsdom cannot compute colors, so color contrast is checked outside the test suite.
 
 ## Deployment
 
